@@ -70,12 +70,13 @@ namespace rpc {
 
 class Control {
 public:
-  Control();
+  Control(bool headless);
   ~Control();
   
   bool                is_shutdown_completed();
   bool                is_shutdown_received()        { return m_shutdownReceived; }
   bool                is_shutdown_started()         { return m_shutdownQuick; }
+  bool                is_headless()                 { return m_headless; }
 
   void                initialize();
   void                cleanup();
@@ -129,6 +130,8 @@ private:
 
   bool                m_shutdownReceived lt_cacheline_aligned;
   bool                m_shutdownQuick lt_cacheline_aligned;
+  
+  bool                m_headless;
 };
 
 #endif

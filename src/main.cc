@@ -99,6 +99,7 @@ parse_options(Control* c, int argc, char** argv) {
     optionParser.insert_flag('D', std::tr1::bind(&do_nothing_str, std::tr1::placeholders::_1));
     optionParser.insert_flag('I', std::tr1::bind(&do_nothing_str, std::tr1::placeholders::_1));
     optionParser.insert_flag('K', std::tr1::bind(&do_nothing_str, std::tr1::placeholders::_1));
+    optionParser.insert_flag('Z', std::tr1::bind(&do_nothing_str, std::tr1::placeholders::_1));
 
     optionParser.insert_option('b', std::tr1::bind(&rpc::call_command_set_string, "network.bind_address.set", std::tr1::placeholders::_1));
     optionParser.insert_option('d', std::tr1::bind(&rpc::call_command_set_string, "directory.default.set", std::tr1::placeholders::_1));
@@ -179,6 +180,7 @@ client_perform() {
 int
 main(int argc, char** argv) {
   try {
+    bool is_headless = false;
 
     // Temporary.
     setlocale(LC_ALL, "");
@@ -187,8 +189,13 @@ main(int argc, char** argv) {
 
     // Initialize logging:
     torrent::log_initialize();
+    
+    if (argc > 1 && !strcmp(argv[1], "-Z")) {
+      is_headless = true;
+      lt_log_print(torrent::LOG_WARN, "Set to headless");
+    }
 
-    control = new Control;
+    control = new Control(is_headless);
     
     srandom(cachedTime.usec() ^ (getpid() << 16) ^ getppid());
     srand48(cachedTime.usec() ^ (getpid() << 16) ^ getppid());
@@ -196,7 +203,10 @@ main(int argc, char** argv) {
     SignalHandler::set_ignore(SIGPIPE);
     SignalHandler::set_handler(SIGINT,   std::tr1::bind(&Control::receive_normal_shutdown, control));
     SignalHandler::set_handler(SIGTERM,  std::tr1::bind(&Control::receive_quick_shutdown, control));
-    SignalHandler::set_handler(SIGWINCH, std::tr1::bind(&display::Manager::force_redraw, control->display()));
+    
+    if (!control->is_headless())
+      SignalHandler::set_handler(SIGWINCH, std::tr1::bind(&display::Manager::force_redraw, control->display()));
+    
     SignalHandler::set_handler(SIGSEGV,  std::tr1::bind(&do_panic, SIGSEGV));
     SignalHandler::set_handler(SIGILL,   std::tr1::bind(&do_panic, SIGILL));
     SignalHandler::set_handler(SIGFPE,   std::tr1::bind(&do_panic, SIGFPE));
@@ -349,8 +359,10 @@ main(int argc, char** argv) {
     // Functions that might not get depracted as they are nice for
     // configuration files, and thus might do with just some
     // cleanup.
-    CMD2_REDIRECT_GENERIC("upload_rate",   "throttle.global_up.max_rate.set_kb");
-    CMD2_REDIRECT_GENERIC("download_rate", "throttle.global_down.max_rate.set_kb");
+    if (!control->is_headless()) {
+      CMD2_REDIRECT_GENERIC("upload_rate",   "throttle.global_up.max_rate.set_kb");
+      CMD2_REDIRECT_GENERIC("download_rate", "throttle.global_down.max_rate.set_kb");
+    }
 
     CMD2_REDIRECT_GENERIC("ratio.enable",     "group.seeding.ratio.enable");
     CMD2_REDIRECT_GENERIC("ratio.disable",    "group.seeding.ratio.disable");
@@ -522,11 +534,13 @@ main(int argc, char** argv) {
       CMD2_REDIRECT        ("get_up_rate", "throttle.global_up.rate");
       CMD2_REDIRECT        ("get_up_total", "throttle.global_up.total");
       CMD2_REDIRECT        ("get_upload_rate", "throttle.global_up.max_rate");
-      CMD2_REDIRECT_GENERIC("set_upload_rate", "throttle.global_up.max_rate.set");
+      if (!control->is_headless())     
+        CMD2_REDIRECT_GENERIC("set_upload_rate", "throttle.global_up.max_rate.set");
       CMD2_REDIRECT        ("get_down_rate", "throttle.global_down.rate");
       CMD2_REDIRECT        ("get_down_total", "throttle.global_down.total");
       CMD2_REDIRECT        ("get_download_rate", "throttle.global_down.max_rate");
-      CMD2_REDIRECT_GENERIC("set_download_rate", "throttle.global_down.max_rate.set");
+      if (!control->is_headless())
+        CMD2_REDIRECT_GENERIC("set_download_rate", "throttle.global_down.max_rate.set");
 
       //
       // Network:
@@ -849,8 +863,10 @@ main(int argc, char** argv) {
     // Make sure we update the display before any scheduled tasks can
     // run, so that loading of torrents doesn't look like it hangs on
     // startup.
-    control->display()->adjust_layout();
-    control->display()->receive_update();
+    if (!control->is_headless()) {
+      control->display()->adjust_layout();
+      control->display()->receive_update();
+    }
 
     worker_thread->start_thread();
 
@@ -890,7 +906,8 @@ handle_sigbus(int signum, siginfo_t* sa, void* ptr) {
     do_panic(signum);
 
   SignalHandler::set_default(signum);
-  display::Canvas::cleanup();
+  if (!control->is_headless())
+    display::Canvas::cleanup();
 
   std::stringstream output;
   output << "Caught SIGBUS, dumping stack:" << std::endl;
@@ -960,7 +977,8 @@ do_panic(int signum) {
   // Use the default signal handler in the future to avoid infinit
   // loops.
   SignalHandler::set_default(signum);
-  display::Canvas::cleanup();
+  if (!control->is_headless())
+    display::Canvas::cleanup();
 
   std::stringstream output;
 

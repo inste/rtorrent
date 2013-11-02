@@ -59,11 +59,8 @@
 
 #include "control.h"
 
-Control::Control() :
-  m_ui(new ui::Root()),
-  m_display(new display::Manager()),
-  m_input(new input::Manager()),
-  m_inputStdin(new input::InputEvent(STDIN_FILENO)),
+Control::Control(bool headless) :
+  m_headless(headless),
 
   m_commandScheduler(new rpc::CommandScheduler()),
   m_objectStorage(new rpc::object_storage()),
@@ -72,11 +69,19 @@ Control::Control() :
   m_shutdownReceived(false),
   m_shutdownQuick(false) {
 
+  if (!headless) {
+    m_ui         = new ui::Root();
+    m_display    = new display::Manager();
+    m_input      = new input::Manager();
+    m_inputStdin = new input::InputEvent(STDIN_FILENO);
+  }
+
   m_core        = new core::Manager();
   m_viewManager = new core::ViewManager();
   m_dhtManager  = new core::DhtManager();
 
-  m_inputStdin->slot_pressed(std::tr1::bind(&input::Manager::pressed, m_input, std::tr1::placeholders::_1));
+  if (!headless)
+    m_inputStdin->slot_pressed(std::tr1::bind(&input::Manager::pressed, m_input, std::tr1::placeholders::_1));
 
   m_taskShutdown.slot() = std::tr1::bind(&Control::handle_shutdown, this);
 
@@ -84,13 +89,17 @@ Control::Control() :
 }
 
 Control::~Control() {
-  delete m_inputStdin;
-  delete m_input;
+  if (!m_headless) {
+    delete m_inputStdin;
+    delete m_input;
+  }
 
   delete m_viewManager;
 
-  delete m_ui;
-  delete m_display;
+  if (!m_headless) {
+    delete m_ui;
+    delete m_display;
+  }
   delete m_core;
   delete m_dhtManager;
 
@@ -100,10 +109,12 @@ Control::~Control() {
 
 void
 Control::initialize() {
-  display::Canvas::initialize();
-  display::Window::slot_schedule(rak::make_mem_fun(m_display, &display::Manager::schedule));
-  display::Window::slot_unschedule(rak::make_mem_fun(m_display, &display::Manager::unschedule));
-  display::Window::slot_adjust(rak::make_mem_fun(m_display, &display::Manager::adjust_layout));
+  if (!m_headless) {
+    display::Canvas::initialize();
+    display::Window::slot_schedule(rak::make_mem_fun(m_display, &display::Manager::schedule));
+    display::Window::slot_unschedule(rak::make_mem_fun(m_display, &display::Manager::unschedule));
+    display::Window::slot_adjust(rak::make_mem_fun(m_display, &display::Manager::adjust_layout));
+  }
 
   m_core->http_stack()->set_user_agent(USER_AGENT);
 
@@ -113,9 +124,11 @@ Control::initialize() {
 
   m_core->set_hashing_view(*m_viewManager->find_throw("hashing"));
 
-  m_ui->init(this);
+  if (!m_headless) {
+    m_ui->init(this);
 
-  m_inputStdin->insert(torrent::main_thread()->poll());
+    m_inputStdin->insert(torrent::main_thread()->poll());
+ }
 }
 
 void
@@ -125,24 +138,28 @@ Control::cleanup() {
 
   priority_queue_erase(&taskScheduler, &m_taskShutdown);
 
-  m_inputStdin->remove(torrent::main_thread()->poll());
+  if (!m_headless)
+    m_inputStdin->remove(torrent::main_thread()->poll());
 
   m_core->download_store()->disable();
 
-  m_ui->cleanup();
+  if (!m_headless)
+    m_ui->cleanup();
   m_core->cleanup();
   
-  display::Canvas::erase_std();
-  display::Canvas::refresh_std();
-  display::Canvas::do_update();
-  display::Canvas::cleanup();
+  if (!m_headless) {
+    display::Canvas::erase_std();
+    display::Canvas::refresh_std();
+    display::Canvas::do_update();
+    display::Canvas::cleanup();
+  }
 }
 
 void
 Control::cleanup_exception() {
   //  delete m_scgi; m_scgi = NULL;
-
-  display::Canvas::cleanup();
+  if (!m_headless)
+    display::Canvas::cleanup();
 }
 
 bool

@@ -166,8 +166,10 @@ torrent::Object
 throttle_update(const char* variable, int64_t value) {
   rpc::commands.call_command(variable, value);
 
-  control->ui()->adjust_up_throttle(0);
-  control->ui()->adjust_down_throttle(0);
+  if (!control->is_headless()) {
+	control->ui()->adjust_up_throttle(0);
+	control->ui()->adjust_down_throttle(0);
+  }
   return torrent::Object();
 }
 
@@ -205,13 +207,17 @@ initialize_command_throttle() {
   CMD2_ANY         ("throttle.global_up.rate",              tr1::bind(&torrent::Rate::rate, torrent::up_rate()));
   CMD2_ANY         ("throttle.global_up.total",             tr1::bind(&torrent::Rate::total, torrent::up_rate()));
   CMD2_ANY         ("throttle.global_up.max_rate",          tr1::bind(&torrent::Throttle::max_rate, torrent::up_throttle_global()));
-  CMD2_ANY_VALUE_V ("throttle.global_up.max_rate.set",      tr1::bind(&ui::Root::set_up_throttle_i64, control->ui(), tr1::placeholders::_2));
-  CMD2_ANY_VALUE_KB("throttle.global_up.max_rate.set_kb",   tr1::bind(&ui::Root::set_up_throttle_i64, control->ui(), tr1::placeholders::_2));
+  if (!control->is_headless()) {
+	CMD2_ANY_VALUE_V ("throttle.global_up.max_rate.set",      tr1::bind(&ui::Root::set_up_throttle_i64, control->ui(), tr1::placeholders::_2));
+	CMD2_ANY_VALUE_KB("throttle.global_up.max_rate.set_kb",   tr1::bind(&ui::Root::set_up_throttle_i64, control->ui(), tr1::placeholders::_2));
+  }
   CMD2_ANY         ("throttle.global_down.rate",            tr1::bind(&torrent::Rate::rate, torrent::down_rate()));
   CMD2_ANY         ("throttle.global_down.total",           tr1::bind(&torrent::Rate::total, torrent::down_rate()));
   CMD2_ANY         ("throttle.global_down.max_rate",        tr1::bind(&torrent::Throttle::max_rate, torrent::down_throttle_global()));
-  CMD2_ANY_VALUE_V ("throttle.global_down.max_rate.set",    tr1::bind(&ui::Root::set_down_throttle_i64, control->ui(), tr1::placeholders::_2));
-  CMD2_ANY_VALUE_KB("throttle.global_down.max_rate.set_kb", tr1::bind(&ui::Root::set_down_throttle_i64, control->ui(), tr1::placeholders::_2));
+  if (!control->is_headless()) {
+	CMD2_ANY_VALUE_V ("throttle.global_down.max_rate.set",    tr1::bind(&ui::Root::set_down_throttle_i64, control->ui(), tr1::placeholders::_2));
+	CMD2_ANY_VALUE_KB("throttle.global_down.max_rate.set_kb", tr1::bind(&ui::Root::set_down_throttle_i64, control->ui(), tr1::placeholders::_2));
+  }
 
   // Temporary names, need to change this to accept real rates rather
   // than kB.

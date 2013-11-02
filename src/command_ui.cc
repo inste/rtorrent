@@ -462,13 +462,16 @@ cmd_view_persistent(const torrent::Object::string_type& args) {
 // TODO: These don't need wrapper functions anymore...
 torrent::Object
 cmd_ui_set_view(const torrent::Object::string_type& args) {
-  control->ui()->download_list()->set_current_view(args);
+  if (!control->is_headless())
+    control->ui()->download_list()->set_current_view(args);
+
   return torrent::Object();
 }
 
 torrent::Object
 cmd_ui_unfocus_download(core::Download* download) {
-  control->ui()->download_list()->unfocus_download(download);
+  if (!control->is_headless())
+    control->ui()->download_list()->unfocus_download(download);
 
   return torrent::Object();
 }
