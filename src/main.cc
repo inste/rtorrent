@@ -44,6 +44,7 @@
 #include <string>
 #include <inttypes.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <torrent/http.h>
 #include <torrent/torrent.h>
 #include <torrent/exceptions.h>
@@ -179,8 +180,30 @@ client_perform() {
 
 int
 main(int argc, char** argv) {
+  bool is_headless = false;
+
+  if (argc > 1 && !strcmp(argv[1], "-Z")) {
+    is_headless = true;
+    pid_t p_child = fork();
+      
+    if (p_child < 0) {
+	 std::cout << "Fail forking to background" << std::endl;
+	 exit(1);
+	}
+	  
+	if (p_child > 0) {
+	  std::cout << p_child << std::endl;
+	  exit(0);
+	};
+	  
+	setsid(); /* obtain a new process group */
+	for (int i = getdtablesize(); i >= 0; --i)
+	  close(i); /* close all descriptors */
+
+	int i = open("/dev/null", O_RDWR); /* Finishing up with old stdin */
+  }  
+	
   try {
-    bool is_headless = false;
 
     // Temporary.
     setlocale(LC_ALL, "");
@@ -189,11 +212,6 @@ main(int argc, char** argv) {
 
     // Initialize logging:
     torrent::log_initialize();
-    
-    if (argc > 1 && !strcmp(argv[1], "-Z")) {
-      is_headless = true;
-      lt_log_print(torrent::LOG_WARN, "Set to headless");
-    }
 
     control = new Control(is_headless);
     
